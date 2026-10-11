@@ -4,6 +4,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 const PAGE_SIZE = Number(process.env.PAGE_SIZE || 3);
+const TRANS_COUNT = Number(process.env.TRANS_COUNT || 80);
 
 // ---- Bảng giá: mã phải có trong B20Item.Code, nếu không INNER JOIN không ghi được dòng nào
 const PRICE_CODES = ['VNM','FPT','HPG','VCB','MWG','SSI','VIC','MSN','GAS','ACB'];
@@ -79,6 +80,119 @@ const CUSTOMERS = Array.from({ length: 25 }, (_, i) => ({
 	IdCardPlace: 'Hà Nội'
 }));
 
+// ---- Loại giao dịch: [TransType, Description]
+const TRANS_TYPES = [
+	['GDTD022','Hoàn nhập dự phòng chứng khoán tự doanh'],
+	['GDTD021','Dự phòng chứng khoán tự doanh'],
+	['GDTD020','CK phát hành thêm về tài khoản'],
+	['GDTD019','CK phát hành thêm về tài khoản'],
+	['GDTD018','Đăng ký mua phát hành ck tự doanh'],
+	['GDTD017','Nhận cổ tức bằng cổ phiếu của Tự doanh'],
+	['GDTD016','Nhận cổ tức bằng tiền của Tự doanh'],
+	['GDTD015','Thanh toán bù trừ tự doanh ngày T-2'],
+	['GDTD014','Thanh toán bù trừ tự doanh ngày T-2'],
+	['GDTD013','Hạch toán TTBT bán ck ngày T-2'],
+	['GDTD012','Hạch toán TTBT mua ck ngày T-2'],
+	['GDTD011','Xuất ck chờ giao dịch bán ngày T-2'],
+	['GDTD010','Xuất ck chờ mua thanh toán ngày T-2'],
+	['GDTD009','Nhập chứng khoán mua ngày T-2'],
+	['GDTD008','Nhập chứng khoán mua ngày T-2'],
+	['GDTD007','Xuất bán CK ngày T0'],
+	['GDTD006','CK bán chờ thanh toán ngày T0'],
+	['GDTD005','Bán chứng khoán ngày T0'],
+	['GDTD004','Bán chứng khoán ngày T0'],
+	['GDTD003','Bán chứng khoán ngày T0'],
+	['GDTD002','Mua chứng khoán ngày T0'],
+	['GDTD001','Mua chứng khoán ngày T0'],
+	['GDNDT059','Hợp đồng tiền gửi tái tục(gốc cũ)'],
+	['GDNDT058','Hợp đồng tiền gửi tất toán/tất toán trước hạn'],
+	['GDNDT057','Phí lưu ký phải thu của NĐT'],
+	['GDNDT056','Công ty thu phí LK'],
+	['GDNDT055','NĐT thanh toán phí LK'],
+	['GDNDT054','NĐT thanh toán phí LK'],
+	['GDNDT053','Phân bổ lãi KKH cho NĐT'],
+	['GDNDT052','Phân bổ lãi KKH cho NĐT'],
+	['GDNDT051','Phân bổ lãi KKH cho NĐT'],
+	['GDNDT049','Phân bổ cố tức cho tự doanh'],
+	['GDNDT048','Phân bổ cố tức cho NĐT'],
+	['GDNDT047','Phân bổ cố tức cho NĐT'],
+	['GDNDT042','NĐT trả  lãi ký quỹ'],
+	['GDNDT041','Công ty thu lãi ký quỹ'],
+	['GDNDT040','Công ty thu nợ vay ký quỹ'],
+	['GDNDT039','Khách hàng thanh toán nợ vay ký quỹ  (NĐT  nước ngoài)'],
+	['GDNDT038','Khách hàng thanh toán nợ vay ký quỹ  (NĐT trong nước)'],
+	['GDNDT037','Khách hàng nhận nợ vay ký quỹ (NĐT  nước ngoài)'],
+	['GDNDT036','Khách hàng nhận nợ vay ký quỹ (NĐT trong nước)'],
+	['GDNDT035','Giải ngân cho vay ký quỹ'],
+	['GDNDT034','Thu lãi ứng trước'],
+	['GDNDT033','Công ty thu nợ tiền ứng trước'],
+	['GDNDT032','Khách hàng nước ngoài hoàn trả tiền Ứng trước'],
+	['GDNDT031','Khách hàng trong nước hoàn trả tiền Ứng trước'],
+	['GDNDT030','Khách hàng nước ngoài nhận tiền Ứng trước'],
+	['GDNDT029','Khách hàng trong nước nhận tiền Ứng trước'],
+	['GDNDT028','Giải Ngân Ứng trước tiền bán chứng khoán'],
+	['GDNDT027','Thanh toán bù trừ T-2 NDT nước ngoài'],
+	['GDNDT026','Thanh toán bù trừ T-2 NDT trong nước'],
+	['GDNDT025','Thanh toán bù trừ T-2 NDT nước ngoài'],
+	['GDNDT024','Thanh toán bù trừ T-2 NDT trong nước'],
+	['GDNDT023','Thuế bán T-2 NDT trong nước, nước ngoài'],
+	['GDNDT022','Thuế bán T-2 NDT  nước ngoài'],
+	['GDNDT021','Thuế bán T-2 NDT trong nước'],
+	['GDNDT020','Thu phí bán chứng khoán ngày T-2'],
+	['GDNDT019','Phí bán T-2 NDT  nước ngoài'],
+	['GDNDT018','Phí bán T-2 NDT trong nước'],
+	['GDNDT017','Tiền bán CK ngày T-2 NDT  nước ngoài'],
+	['GDNDT016','Tiền bán CK ngày T-2 NDT trong nước'],
+	['GDNDT015','Tiền mua CK ngày T-2 NDT  nước ngoài'],
+	['GDNDT014','Tiền mua CK ngày T-2 NĐT trong nước'],
+	['GDNDT013','Phí bán T0 NDT (cả trong nước và nước ngoài)'],
+	['GDNDT012','Phí mua T0 NDT  nước ngoài'],
+	['GDNDT011','Phí mua T0 NDT trong nước'],
+	['GDNDT010','Phí mua T0 NDT  nước ngoài'],
+	['GDNDT009','Phí mua T0 NDT trong nước'],
+	['GDNDT008','Tiền mua chứng khoán ngày T0 NĐT nước ngoài'],
+	['GDNDT007','Tiền mua chứng khoán ngày T0 NĐT trong nước'],
+	['GDNDT006','Công ty cắt  tiền mua TP theo yêu cầu của KH'],
+	['GDNDT005','Công ty cắt  tiền mua TP theo yêu cầu của KH'],
+	['GDNDT004','Rút tiền tài khoản NDT  nước ngoài'],
+	['GDNDT003','Rút tiền tài khoản NĐT trong nước ngân hàng VP Bank'],
+	['GDNDT002','Nộp tiền vào tài khoản NĐT nước ngoài'],
+	['GDNDT001','Nộp tiền vào tài khoản NĐT trong nước ngân hàng VP Bank']
+];
+
+// Giao dịch liên quan chứng khoán thì có StockCode và Quantity
+const STOCK_RE = /chứng khoán|CK|cổ tức|cổ phiếu|TP\b|trái phiếu|phát hành/i;
+
+// Sinh danh sách giao dịch cho 1 ngày/chi nhánh (cố định theo DocDate nên chạy lại vẫn ra cùng dữ liệu)
+function buildTrans(docDate, branchId) {
+	const day = (docDate || new Date().toISOString().slice(0, 10)).slice(0, 10);
+	return Array.from({ length: TRANS_COUNT }, (_, i) => {
+		const t = TRANS_TYPES[(i * 7) % TRANS_TYPES.length];
+		const cus = CUSTOMERS[i % CUSTOMERS.length];
+		const isStock = t[0].startsWith('GDTD') || STOCK_RE.test(t[1]);
+		const sec = SECURITIES[(i * 5) % SECURITIES.length];
+		const qty = isStock ? (((i % 9) + 1) * 100) : 0;
+		return {
+			Id: i + 1,
+			ReferenceNo: 'REF' + day.replace(/-/g, '') + String(i + 1).padStart(5, '0'),
+			TransDate: day + 'T00:00:00',
+			TransType: t[0],
+			Description: t[1],
+			InvestorCode: cus.CustomerCode,
+			BranchID: branchId || 'A01',
+			BranchProcess: branchId || 'A01',
+			BankCd: i % 3 === 0 ? 'VPB' : (i % 3 === 1 ? 'VCB' : ''),
+			StockCode: isStock ? sec.ItemCode : '',
+			Quantity: qty,
+			Amount: isStock ? qty * 10000 : ((i % 10) + 1) * 1000000,
+			TransFloor: isStock ? sec.TradePlace : '',
+			IsCoreBank: i % 2 === 0 ? 'Y' : 'N',
+			CustomerType: cus.CustomerType,
+			CustomerCountry: cus.CustomerCountry
+		};
+	});
+}
+
 function page(list, body) {
 	const lastId = Number((body && body.Id) || 0);
 	return list.filter(i => i.Id > lastId).slice(0, PAGE_SIZE).map(i => ({ IdMax: list.length, ...i }));
@@ -102,7 +216,7 @@ app.post('/token', (req, res) => {
 function dataRoute(path, list) {
 	app.post(path, (req, res) => {
 		if (!auth(req, res)) return;
-		const rows = page(list, req.body);
+		const rows = page(typeof list === 'function' ? list(req.body) : list, req.body);
 		console.log(path, 'DocDate', req.body.DocDate, 'Id', req.body.Id, '=> rows', rows.length);
 		res.json(rows);
 	});
@@ -111,7 +225,8 @@ function dataRoute(path, list) {
 dataRoute('/price', PRICE_ITEMS);
 dataRoute('/item', SECURITIES);
 dataRoute('/cus', CUSTOMERS);
+dataRoute('/trans', body => buildTrans(body.DocDate, body.BranchID));
 
-app.get('/', (req, res) => res.send('mock api up: POST /token, /price, /item, /cus'));
+app.get('/', (req, res) => res.send('mock api up: POST /token, /price, /item, /cus, /trans'));
 
 app.listen(process.env.PORT || 3000, () => console.log('mock api up'));
